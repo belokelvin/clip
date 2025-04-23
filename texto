@@ -1,0 +1,11 @@
+CREATE TABLE "tbl_Fila_Processamento" (
+	"id"	integer,
+	"referencia"	varchar(200),
+	"datahora_criado"	varchar(50),
+	"nome_maquina"	VARCHAR(200),
+	"info_adicionais"	TEXT,
+	"status"	varchar(100),
+	"obs"	TEXT,
+	"ultima_atualizacao"	datetime,
+	PRIMARY KEY("id")
+)
