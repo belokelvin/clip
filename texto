@@ -1,18 +1,74 @@
-CREATE TABLE "tbl_dados_itens_fila" (
-	"id_item"	integer NOT NULL,
-	"id_execucao"	integer,
-	"id_item_fila"	varchar(500),
-	"data_hora_inicio"	varchar(3000),
-	"data_hora_fim"	varchar(3000),
-	"tempo_execucao"	TEXT,
-	"nome_fila"	varchar(3000),
-	"referencia"	varchar(3000),
-	"detalhes_item_fila"	text,
-	"status"	varchar(3000),
-	"tipo_excecao"	varchar(3000),
-	"descricao_excecao"	text,
-	"screenshot_excecao"	TEXT,
-	"ULTIMA_ATUALIZACAO"	datetime,
-	FOREIGN KEY("id_execucao") REFERENCES "tbl_dados_execucao"("id_execucao"),
-	PRIMARY KEY("id_item" AUTOINCREMENT)
-)
+import concurrent.futures
+from time import sleep
+
+class T2CProcess:
+    _var_dictConfig = InitAllSettings.var_dictConfig
+    _var_botWebbot = InitAllSettings.var_botWebbot
+    _var_botDesktopbot = InitAllSettings.var_botDesktopbot
+
+    @staticmethod
+    def process():
+        Maestro.write_log('Process Started')
+
+        try:
+            var_returnExecute = InitAllApplications.var_lstPeriodo
+            
+            var_strDataHoraInicio = GetTransaction.var_dictQueueItem['datahora_criado']
+            var_strFilaProcessar = GetTransaction.var_dictQueueItem['info_adicionais']
+
+            var_strAgencia = var_strFilaProcessar['agencia']
+            var_strConta = var_strFilaProcessar['conta']
+            var_strEmpresa = var_strFilaProcessar['empresa']
+            var_strDivisao = var_strFilaProcessar['divisao']
+            var_tplItensPreenchimentoFila = var_strEmpresa, var_strConta, var_strDivisao
+
+            var_JSContaAcessada = T2CProcess._var_botWebbot.execute_javascript('return document.querySelector("#TRNcontainer01 > table > tbody > tr > td:nth-child(1) > h1")')
+            if var_JSContaAcessada is None:
+                AcessoItau.fechar_tela_atualizar_documentos()
+
+            var_boolTrocarConta = AcessoItau.verificar_necessidade_trocar_conta(
+                arg_strAgencia=var_strAgencia, arg_strConta=var_strConta
+            )
+
+            if var_boolTrocarConta:
+                AcessoItau.alterar_conta(var_strConta)
+
+            AcessoItau.segunda_verificacao_conta(arg_strAgencia=var_strAgencia, arg_strConta=var_strConta)
+
+            if var_JSContaAcessada is None:
+                AcessoItau.fechar_tela_atualizar_documentos()
+
+            if var_JSContaAcessada is None:
+                Maestro.write_log("Acessando Consulta")
+                AcessoItau.acessar_modulo_consulta()
+
+            var_tplValoresColetados = PreenchimentoProcesso.coleta_valores()
+
+            PreenchimentoProcesso.preenche_planilha_saldo_aplicacao(
+                var_tplValoresColetados, var_tplItensPreenchimentoFila,
+                var_returnExecute, var_strDataHoraInicio, var_strFilaProcessar
+            )
+
+            PreenchimentoProcesso.preenche_planilha_investimentos(
+                var_tplValoresColetados, var_tplItensPreenchimentoFila,
+                var_returnExecute, var_strDataHoraInicio, var_strFilaProcessar
+            )
+
+            Maestro.write_log('Finalizado o processamento da conta: ' + var_strConta)
+
+        except Exception as e:
+            Maestro.write_log(f'Erro durante a execução: {str(e)}')
+
+        Maestro.write_log('Process Finished')
+
+    @classmethod
+    def execute(cls):
+        timeout_em_segundos = 10 * 60  # 10 minutos
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(cls.process)
+
+            try:
+                future.result(timeout=timeout_em_segundos)
+            except concurrent.futures.TimeoutError:
+                raise BusinessRuleException("Perda de conexão com chromedriver: Tempo limite excedido (10 minutos).")
