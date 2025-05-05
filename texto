@@ -1,74 +1,46 @@
-import concurrent.futures
-from time import sleep
+PreenchimentoProcesso.mover_arquivos(arg_strCaminhoSalvarArquivo = cls._var_dictConfig["arg_CaminhaSalvarPdf"], arg_strConta=var_strConta, arg_stragencia=var_strAgencia)
+        PreenchimentoProcesso.renomear_arquivos(arg_strAgencia = var_strAgencia, 
+                                                arg_strConta = var_strConta, 
+                                                arg_strCaminhoSalvarArquivo = cls._var_dictConfig["arg_CaminhaSalvarPdf"])
 
-class T2CProcess:
-    _var_dictConfig = InitAllSettings.var_dictConfig
-    _var_botWebbot = InitAllSettings.var_botWebbot
-    _var_botDesktopbot = InitAllSettings.var_botDesktopbot
 
-    @staticmethod
-    def process():
-        Maestro.write_log('Process Started')
 
-        try:
-            var_returnExecute = InitAllApplications.var_lstPeriodo
+ var_strPathArquivo  = cls._var_dictConfig['caminhoTXTauxiliar']
+          var_strcontas = arg_strConta.replace('-', '')
+          var_strAgencia = arg_stragencia.replace('-', '')
+          with open(var_strPathArquivo, 'r') as arquivo:
+                var_strMesAno = arquivo.read().strip()
+
+          if not os.path.exists(var_strPathArquivo) or os.path.getsize(var_strPathArquivo)==0 or var_strMesAno == "": 
+            Maestro.write_log("Selecionando 'Mês Anterior'")
+            var_dateUltimoDiaMesPassado = date.today().replace(day=1) - timedelta(days=1)
+            var_datePrimeiroDiaMesPassado = var_dateUltimoDiaMesPassado.replace(day=1)
+            var_strPrimeiroDiaMesPassado = var_datePrimeiroDiaMesPassado.strftime("%d_%m_%Y")
+            var_strUltimoDiaMesPassado = var_dateUltimoDiaMesPassado.strftime("%d_%m_%Y")
+            var_strDia = str(date.today().day)
+            var_strMes = str(date.today().month)
+            if  int(var_strDia)<10:
+               var_strDia = "0"+str(date.today().day)
+            if int(var_strMes)<10:
+               var_strMes = "0"+str(date.today().month)
+               
+
+            var_strNomeArquivoPdf = f"Extrato_{var_strAgencia}_{var_strcontas}_{var_strDia}-{var_strMes}-{str(date.today().year)}.pdf"
+            var_strNomeArquivoXlsx = f"Extrato_Lançamentos_{var_strAgencia}_{var_strcontas}_{var_strDia}-{var_strMes}-{str(date.today().year)}.xlsx"
+          else:
+            var_strDataConvertida = datetime.strptime(var_strMesAno, "%m.%Y")
+            var_strPrimeiroDiaMesPassado = var_strDataConvertida.replace(day=1)
+            var_strPrimeiroDiaMesPassado = var_strPrimeiroDiaMesPassado.strftime('%d_%m_%Y')
+            var_strUltimoDiaMesPassado = var_strDataConvertida.replace(day= calendar.monthrange(var_strDataConvertida.year, var_strDataConvertida.month)[1])
+            var_strUltimoDiaMesPassado = var_strUltimoDiaMesPassado.strftime('%d_%m_%Y')
             
-            var_strDataHoraInicio = GetTransaction.var_dictQueueItem['datahora_criado']
-            var_strFilaProcessar = GetTransaction.var_dictQueueItem['info_adicionais']
+            var_strDia = str(date.today().day)
+            var_strMes = str(date.today().month)
+            if  int(var_strDia)<10:
+               var_strDia = "0"+str(date.today().day)
+            if int(var_strMes)<10:
+               var_strMes = "0"+str(date.today().month)
+               
 
-            var_strAgencia = var_strFilaProcessar['agencia']
-            var_strConta = var_strFilaProcessar['conta']
-            var_strEmpresa = var_strFilaProcessar['empresa']
-            var_strDivisao = var_strFilaProcessar['divisao']
-            var_tplItensPreenchimentoFila = var_strEmpresa, var_strConta, var_strDivisao
-
-            var_JSContaAcessada = T2CProcess._var_botWebbot.execute_javascript('return document.querySelector("#TRNcontainer01 > table > tbody > tr > td:nth-child(1) > h1")')
-            if var_JSContaAcessada is None:
-                AcessoItau.fechar_tela_atualizar_documentos()
-
-            var_boolTrocarConta = AcessoItau.verificar_necessidade_trocar_conta(
-                arg_strAgencia=var_strAgencia, arg_strConta=var_strConta
-            )
-
-            if var_boolTrocarConta:
-                AcessoItau.alterar_conta(var_strConta)
-
-            AcessoItau.segunda_verificacao_conta(arg_strAgencia=var_strAgencia, arg_strConta=var_strConta)
-
-            if var_JSContaAcessada is None:
-                AcessoItau.fechar_tela_atualizar_documentos()
-
-            if var_JSContaAcessada is None:
-                Maestro.write_log("Acessando Consulta")
-                AcessoItau.acessar_modulo_consulta()
-
-            var_tplValoresColetados = PreenchimentoProcesso.coleta_valores()
-
-            PreenchimentoProcesso.preenche_planilha_saldo_aplicacao(
-                var_tplValoresColetados, var_tplItensPreenchimentoFila,
-                var_returnExecute, var_strDataHoraInicio, var_strFilaProcessar
-            )
-
-            PreenchimentoProcesso.preenche_planilha_investimentos(
-                var_tplValoresColetados, var_tplItensPreenchimentoFila,
-                var_returnExecute, var_strDataHoraInicio, var_strFilaProcessar
-            )
-
-            Maestro.write_log('Finalizado o processamento da conta: ' + var_strConta)
-
-        except Exception as e:
-            Maestro.write_log(f'Erro durante a execução: {str(e)}')
-
-        Maestro.write_log('Process Finished')
-
-    @classmethod
-    def execute(cls):
-        timeout_em_segundos = 10 * 60  # 10 minutos
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(cls.process)
-
-            try:
-                future.result(timeout=timeout_em_segundos)
-            except concurrent.futures.TimeoutError:
-                raise BusinessRuleException("Perda de conexão com chromedriver: Tempo limite excedido (10 minutos).")
+            var_strNomeArquivoPdf = f"Extrato_{var_strAgencia}_{var_strcontas}_{var_strDia}-{var_strMes}-{str(date.today().year)}.pdf"
+            var_strNomeArquivoXlsx = f"Extrato_Lançamentos_{var_strAgencia}_{var_strcontas}_{var_strDia}-{var_strMes}-{str(date.today().year)}.xlsx"
